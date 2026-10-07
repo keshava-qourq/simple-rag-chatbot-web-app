@@ -13,10 +13,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import models  # noqa: F401 -- imported so the tables register before create_all
 from app.database import Base, engine
+from app.routers import documents, threads
 
 app = FastAPI(
     title="Simple RAG chatbot web app",
-    description="Build a simple RAG chatbot web app with no sign-in or auth. Single shared workspace.",
+    description="Build a simple RAG chatbot web app with no sign-in or auth. Single shared workspace.",  # noqa: E501
     version="0.1.0",
 )
 
@@ -37,6 +38,9 @@ app.add_middleware(
 # The scaffold ships no migrations, so the tables are created from the models on
 # startup. Replace this with Alembic before anything holds data worth keeping.
 Base.metadata.create_all(bind=engine)
+
+app.include_router(documents.router)
+app.include_router(threads.router)
 
 
 @app.get("/health")

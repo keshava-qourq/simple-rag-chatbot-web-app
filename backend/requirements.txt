@@ -3,6 +3,19 @@ uvicorn[standard]==0.32.0
 sqlalchemy==2.0.35
 pydantic==2.9.2
 psycopg[binary]==3.2.3
+# FastAPI needs this to parse the multipart/form-data upload on POST /documents.
+python-multipart==0.0.17
+# The architecture's object store and job queue (objstore, queue) are both
+# Amazon services reachable through the same SDK.
+boto3==1.35.68
+# pgvector's own SQLAlchemy integration, used by app/vector_type.py so
+# `chunks.embedding` is a real `vector(1536)` column once DATABASE_URL points
+# at the Postgres+pgvector instance the architecture names.
+pgvector==0.3.6
+# Hosted AI provider (embeddings + generation). The architecture names an
+# "OpenAI/Anthropic-class" API without picking one; this is the assumption,
+# easy to swap for another provider's SDK when that decision is made.
+openai==1.54.4
 
 # Checks. The platform installs and runs this file before it reports that the
 # generated tests pass, so the test dependencies belong here rather than in a
