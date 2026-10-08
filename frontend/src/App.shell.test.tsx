@@ -31,7 +31,15 @@ describe("App shell", () => {
     expect(screen.getAllByText(/shared workspace/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/no sign-in/i).length).toBeGreaterThan(0);
 
-    const forbidden = [/sign in/i, /sign up/i, /log in/i, /password/i, /invite/i, /continue as/i, /verify your email/i];
+    const forbidden = [
+      /sign in/i,
+      /sign up/i,
+      /log in/i,
+      /password/i,
+      /invite/i,
+      /continue as/i,
+      /verify your email/i,
+    ];
     const bodyText = document.body.textContent || "";
     forbidden.forEach((pattern) => {
       expect(bodyText).not.toMatch(pattern);
