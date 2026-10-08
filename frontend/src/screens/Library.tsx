@@ -1,7 +1,3 @@
-"use client";
-// Generated screens hold state and handle events, which a server component
-// cannot do. Next.js renders on the server unless a module says otherwise.
-
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import React from "react";
 
