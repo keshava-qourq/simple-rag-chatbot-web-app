@@ -64,9 +64,7 @@ class Settings:
     # empty value still lets the app start (and its tests run with the HTTP
     # boundary faked), but a real ingestion call fails loudly instead of
     # silently shipping an empty Authorization header.
-    embedding_api_key: str = os.getenv("EMBEDDING_API_KEY", "") or os.getenv(
-        "PROVIDER_API_KEY", ""
-    )
+    embedding_api_key: str = os.getenv("EMBEDDING_API_KEY", "") or os.getenv("PROVIDER_API_KEY", "")
     embedding_max_retries: int = int(os.getenv("EMBEDDING_MAX_RETRIES", "3"))
     embedding_backoff_seconds: float = float(os.getenv("EMBEDDING_BACKOFF_SECONDS", "0.1"))
     # Local stand-in for the architecture's S3 object store -- see

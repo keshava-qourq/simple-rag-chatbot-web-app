@@ -100,9 +100,7 @@ async def list_documents(
 
 
 @router.get("/status", response_model=DocumentStatusResponse)
-async def poll_document_status(
-    db: DbSession, ids: str | None = None
-) -> DocumentStatusResponse:
+async def poll_document_status(db: DbSession, ids: str | None = None) -> DocumentStatusResponse:
     """Lightweight poll so the library view updates without a reload."""
     query = db.query(Document)
     if ids:

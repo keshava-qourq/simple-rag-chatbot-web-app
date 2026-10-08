@@ -61,9 +61,7 @@ def _call_provider(text: str) -> list[float]:
             settings.embedding_provider_url, json=payload, headers=headers, timeout=30.0
         )
     except httpx.TransportError as exc:
-        raise RetryableProviderError(
-            f"transient network error: {exc.__class__.__name__}"
-        ) from None
+        raise RetryableProviderError(f"transient network error: {exc.__class__.__name__}") from None
 
     if response.status_code == 429 or response.status_code >= 500:
         raise RetryableProviderError(_error_message(response))
