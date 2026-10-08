@@ -6,14 +6,18 @@ is a stub that returns a typed placeholder, so the service starts, serves its
 OpenAPI document and passes its tests before a single handler is implemented.
 """
 
-import os
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app import models  # noqa: F401 -- imported so the tables register before create_all
-from app.database import Base, engine
+from app.config import get_allowed_origins, validate_required
+from app.database import init_db
 from app.routers import documents, threads
+
+# Fail fast, naming the missing variable: a process that starts without a
+# provider key or an object-storage credential should crash here, not surface
+# a confusing 500 on a user's first upload or question. DATABASE_URL is not
+# checked here -- it has a safe, non-secret SQLite fallback (app.config).
+validate_required()
 
 app = FastAPI(
     title="Simple RAG chatbot web app",
@@ -26,18 +30,18 @@ app = FastAPI(
 # deployed, the platform injects the frontend's real URL as ALLOWED_ORIGINS (comma
 # separated). Point ALLOWED_ORIGINS at the real thing and nothing else has to change.
 _dev_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
-_allowed_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_allowed_origins or _dev_origins,
+    allow_origins=get_allowed_origins() or _dev_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# The scaffold ships no migrations, so the tables are created from the models on
-# startup. Replace this with Alembic before anything holds data worth keeping.
-Base.metadata.create_all(bind=engine)
+# Creates the pgvector extension (Postgres only) and every table from the
+# models in app/models.py. The scaffold ships no migrations beyond this; this
+# is the migration path that runs at startup.
+init_db()
 
 app.include_router(documents.router)
 app.include_router(threads.router)

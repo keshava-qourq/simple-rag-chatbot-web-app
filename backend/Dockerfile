@@ -13,6 +13,13 @@ COPY app ./app
 RUN useradd --create-home --uid 10001 appuser
 USER appuser
 
+# All server-side configuration (PROVIDER_API_KEY, DATABASE_URL, the S3_*
+# credentials, ALLOWED_ORIGINS) is read from the process environment at
+# startup -- see app/config.py and .env.example. Nothing is baked into the
+# image or copied from a .env file; the orchestrator (compose, the platform,
+# a secrets manager) injects these as real environment variables when it
+# runs the container.
+
 EXPOSE 8000
 
 # Reports the container unhealthy when the app stops answering. Uses the Python
