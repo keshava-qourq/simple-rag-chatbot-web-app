@@ -70,6 +70,16 @@ class Settings:
     # Local stand-in for the architecture's S3 object store -- see
     # app/services/storage.py.
     storage_dir: str = os.getenv("DOCUMENT_STORAGE_DIR", "./data/documents")
+    # Per-file upload cap enforced by POST /documents (app/routers/documents.py).
+    # 25 MB default; override with MAX_UPLOAD_BYTES.
+    max_upload_bytes: int = int(os.getenv("MAX_UPLOAD_BYTES", str(25 * 1024 * 1024)))
+    # File-extension allowlist enforced by POST /documents. Stored without
+    # leading dots, lowercased, as a frozenset for O(1) membership checks.
+    allowed_extensions: frozenset[str] = frozenset(
+        ext.strip().lower().lstrip(".")
+        for ext in os.getenv("ALLOWED_EXTENSIONS", "pdf,docx,txt,md").split(",")
+        if ext.strip()
+    )
 
 
 settings = Settings()

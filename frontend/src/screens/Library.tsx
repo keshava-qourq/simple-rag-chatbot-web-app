@@ -5,40 +5,40 @@ import * as UI from "@/lib/ui";
 import { Icons } from "@/lib/icons";
 import { brand } from "@/lib/brand";
 import { useNavigate } from "@/lib/navigate";
+import {
+  type ApiDocument,
+  deleteDocument,
+  downloadOriginal,
+  getDocumentStatuses,
+  listDocuments,
+  retryDocument,
+  uploadDocument,
+} from "@/lib/api";
 
 const { Select } = UI;
-const {
-  Search,
-  X,
-  ChevronRight,
-  ChevronLeft,
-  FileText,
-  Clock,
-  Trash,
-  Filter,
-  Download,
-  Upload,
-  AlertCircle,
-  CheckCircle,
-} = Icons;
 
 const MAX_BYTES = 25 * 1024 * 1024;
 const ALLOWED_EXT = ["pdf", "docx", "txt", "md"];
 const PAGE_SIZE = 8;
+const STATUS_POLL_MS = 1500;
 
-interface LibraryDocument {
+interface PendingUpload {
+  clientId: string;
+  filename: string;
+  file_type: string;
+  size_bytes: number;
+  progress: number;
+}
+
+interface RowDoc {
   id: string;
   filename: string;
   file_type: string;
   size_bytes: number;
-  s3_key: string;
   status: string;
   failure_reason: string | null;
   uploaded_at: string;
-  chunks: number;
   progress?: number;
-  sim?: boolean;
-  ticks?: number;
 }
 
 interface RejectedFile {
@@ -50,163 +50,6 @@ interface LibraryNotice {
   tone: "ok" | "error";
   text: string;
 }
-
-const INITIAL_DOCUMENTS: LibraryDocument[] = [
-  {
-    id: "doc_7a21",
-    filename: "Engineering_Onboarding_Handbook.pdf",
-    file_type: "pdf",
-    size_bytes: 4404019,
-    s3_key: "shared/doc_7a21/Engineering_Onboarding_Handbook.pdf",
-    status: "ready",
-    failure_reason: null,
-    uploaded_at: "2026-10-07T09:12:00",
-    chunks: 318,
-  },
-  {
-    id: "doc_7a18",
-    filename: "Q3-2026_Board_Update.docx",
-    file_type: "docx",
-    size_bytes: 1887437,
-    s3_key: "shared/doc_7a18/Q3-2026_Board_Update.docx",
-    status: "ready",
-    failure_reason: null,
-    uploaded_at: "2026-10-07T08:40:00",
-    chunks: 96,
-  },
-  {
-    id: "doc_7a15",
-    filename: "Vendor_Agreement_Northwind_2026.pdf",
-    file_type: "pdf",
-    size_bytes: 8284471,
-    s3_key: "shared/doc_7a15/Vendor_Agreement_Northwind_2026.pdf",
-    status: "processing",
-    failure_reason: null,
-    uploaded_at: "2026-10-07T08:05:00",
-    chunks: 0,
-  },
-  {
-    id: "doc_7a09",
-    filename: "incident-postmortem-2026-09-28.md",
-    file_type: "md",
-    size_bytes: 49152,
-    s3_key: "shared/doc_7a09/incident-postmortem-2026-09-28.md",
-    status: "ready",
-    failure_reason: null,
-    uploaded_at: "2026-10-06T17:22:00",
-    chunks: 22,
-  },
-  {
-    id: "doc_7a04",
-    filename: "Payroll_Policy_v4.docx",
-    file_type: "docx",
-    size_bytes: 626688,
-    s3_key: "shared/doc_7a04/Payroll_Policy_v4.docx",
-    status: "failed",
-    failure_reason: "Embedding provider error — rate limited after 3 retries",
-    uploaded_at: "2026-10-06T16:02:00",
-    chunks: 0,
-  },
-  {
-    id: "doc_79f7",
-    filename: "Scanned_Invoice_Batch_14.pdf",
-    file_type: "pdf",
-    size_bytes: 13002342,
-    s3_key: "shared/doc_79f7/Scanned_Invoice_Batch_14.pdf",
-    status: "failed",
-    failure_reason: "No text could be extracted — scan has no text layer and OCR is not supported",
-    uploaded_at: "2026-10-06T11:47:00",
-    chunks: 0,
-  },
-  {
-    id: "doc_79e2",
-    filename: "support-macros.txt",
-    file_type: "txt",
-    size_bytes: 22528,
-    s3_key: "shared/doc_79e2/support-macros.txt",
-    status: "ready",
-    failure_reason: null,
-    uploaded_at: "2026-10-05T15:31:00",
-    chunks: 11,
-  },
-  {
-    id: "doc_79d8",
-    filename: "Security_Review_Checklist.md",
-    file_type: "md",
-    size_bytes: 31744,
-    s3_key: "shared/doc_79d8/Security_Review_Checklist.md",
-    status: "ready",
-    failure_reason: null,
-    uploaded_at: "2026-10-05T10:04:00",
-    chunks: 15,
-  },
-  {
-    id: "doc_79c1",
-    filename: "Customer_Churn_Analysis_H1.pdf",
-    file_type: "pdf",
-    size_bytes: 9542861,
-    s3_key: "shared/doc_79c1/Customer_Churn_Analysis_H1.pdf",
-    status: "ready",
-    failure_reason: null,
-    uploaded_at: "2026-10-04T18:55:00",
-    chunks: 204,
-  },
-  {
-    id: "doc_79b6",
-    filename: "Partner_Integration_Spec_v2.pdf",
-    file_type: "pdf",
-    size_bytes: 3251200,
-    s3_key: "shared/doc_79b6/Partner_Integration_Spec_v2.pdf",
-    status: "processing",
-    failure_reason: null,
-    uploaded_at: "2026-10-04T14:12:00",
-    chunks: 0,
-  },
-  {
-    id: "doc_79a3",
-    filename: "Brand_Guidelines_2026.pdf",
-    file_type: "pdf",
-    size_bytes: 24746393,
-    s3_key: "shared/doc_79a3/Brand_Guidelines_2026.pdf",
-    status: "ready",
-    failure_reason: null,
-    uploaded_at: "2026-10-03T12:20:00",
-    chunks: 141,
-  },
-  {
-    id: "doc_7991",
-    filename: "Remote_Work_Policy.docx",
-    file_type: "docx",
-    size_bytes: 348160,
-    s3_key: "shared/doc_7991/Remote_Work_Policy.docx",
-    status: "ready",
-    failure_reason: null,
-    uploaded_at: "2026-10-02T16:48:00",
-    chunks: 19,
-  },
-  {
-    id: "doc_7988",
-    filename: "API_Rate_Limits_Runbook.md",
-    file_type: "md",
-    size_bytes: 18432,
-    s3_key: "shared/doc_7988/API_Rate_Limits_Runbook.md",
-    status: "failed",
-    failure_reason: "Unreadable file — document stream ended unexpectedly",
-    uploaded_at: "2026-10-02T09:15:00",
-    chunks: 0,
-  },
-  {
-    id: "doc_7975",
-    filename: "meeting-notes-2026-09-30.txt",
-    file_type: "txt",
-    size_bytes: 9216,
-    s3_key: "shared/doc_7975/meeting-notes-2026-09-30.txt",
-    status: "ready",
-    failure_reason: null,
-    uploaded_at: "2026-09-30T17:02:00",
-    chunks: 6,
-  },
-];
 
 const SURFACE = "#151A20";
 const SURFACE_SOFT = "#11161B";
@@ -233,6 +76,10 @@ function extOf(name: string) {
   return parts.length > 1 ? (parts.pop() as string).toLowerCase() : "";
 }
 
+function statusKey(status: string) {
+  return status.toLowerCase();
+}
+
 export default function Screen() {
   const navigate = useNavigate();
   const {
@@ -249,7 +96,10 @@ export default function Screen() {
     ChevronRight,
   } = Icons;
 
-  const STATUS_META = {
+  const STATUS_META: Record<
+    string,
+    { label: string; Icon: typeof CheckCircle; color: string; tint: string; line: string }
+  > = {
     ready: {
       label: "Ready",
       Icon: CheckCircle,
@@ -280,70 +130,68 @@ export default function Screen() {
     },
   };
 
-  const [docs, setDocs] = React.useState<LibraryDocument[]>(INITIAL_DOCUMENTS);
+  const [docs, setDocs] = React.useState<ApiDocument[]>([]);
+  const [pending, setPending] = React.useState<PendingUpload[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("all");
   const [page, setPage] = React.useState(1);
   const [rejected, setRejected] = React.useState<RejectedFile[]>([]);
   const [dragging, setDragging] = React.useState(false);
   const [notice, setNotice] = React.useState<LibraryNotice | null>(null);
-  const [confirmDoc, setConfirmDoc] = React.useState<LibraryDocument | null>(null);
+  const [confirmDoc, setConfirmDoc] = React.useState<RowDoc | null>(null);
 
-  const fileInputRef = React.useRef(null);
-  const chooseBtnRef = React.useRef(null);
-  const confirmBtnRef = React.useRef(null);
-  const lastFocusRef = React.useRef(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const chooseBtnRef = React.useRef<HTMLButtonElement | null>(null);
+  const confirmBtnRef = React.useRef<HTMLButtonElement | null>(null);
+  const lastFocusRef = React.useRef<HTMLElement | null>(null);
 
-  /* simulated ingestion pipeline for freshly uploaded files */
+  const refreshDocuments = React.useCallback(async () => {
+    try {
+      const res = await listDocuments({ limit: 100 });
+      setDocs(res.items);
+      setLoadError(null);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Could not load the document library.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  /* initial load from the real API */
   React.useEffect(() => {
-    const active = docs.some(
-      (d) => d.status === "uploading" || (d.status === "processing" && d.sim),
-    );
-    if (!active) return undefined;
-    const id = setInterval(() => {
-      const finished = [];
-      const next = docs.map((d) => {
-        if (d.status === "uploading") {
-          const progress = Math.min(100, (d.progress || 0) + 25);
-          if (progress >= 100)
-            return { ...d, progress: 100, status: "processing", sim: true, ticks: 0 };
-          return { ...d, progress };
-        }
-        if (d.status === "processing" && d.sim) {
-          const ticks = (d.ticks || 0) + 1;
-          if (ticks >= 4) {
-            finished.push(d.filename);
-            return {
-              ...d,
-              status: "ready",
-              sim: false,
-              ticks: 0,
-              failure_reason: null,
-              chunks: Math.max(4, Math.round(d.size_bytes / 14000)),
-            };
-          }
-          return { ...d, ticks };
-        }
-        return d;
-      });
-      setDocs(next);
-      if (finished.length) {
-        setNotice({
-          tone: "ok",
-          text:
-            finished.length === 1
-              ? finished[0] + " finished indexing and is now Ready for retrieval."
-              : finished.length + " documents finished indexing and are now Ready for retrieval.",
-        });
+    refreshDocuments();
+  }, [refreshDocuments]);
+
+  /* poll real ingestion status for documents still Processing */
+  React.useEffect(() => {
+    const processingIds = docs
+      .filter((d) => statusKey(d.status) === "processing")
+      .map((d) => d.id);
+    if (processingIds.length === 0) return undefined;
+    const timer = setInterval(async () => {
+      try {
+        const res = await getDocumentStatuses(processingIds);
+        const byId = new Map(res.statuses.map((s) => [s.id, s]));
+        setDocs((prev) =>
+          prev.map((d) => {
+            const s = byId.get(d.id);
+            if (!s) return d;
+            return { ...d, status: s.status, failure_reason: s.failure_reason };
+          }),
+        );
+      } catch {
+        // transient poll failure: try again next tick
       }
-    }, 600);
-    return () => clearInterval(id);
+    }, STATUS_POLL_MS);
+    return () => clearInterval(timer);
   }, [docs]);
 
   /* dialog: escape to close, focus the confirm action, restore focus after */
   React.useEffect(() => {
     if (!confirmDoc) return undefined;
-    const onKey = (e) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") closeConfirm();
     };
     document.addEventListener("keydown", onKey);
@@ -351,37 +199,92 @@ export default function Screen() {
     return () => document.removeEventListener("keydown", onKey);
   }, [confirmDoc]);
 
+  const rows: RowDoc[] = React.useMemo(() => {
+    const pendingRows: RowDoc[] = pending.map((p) => ({
+      id: p.clientId,
+      filename: p.filename,
+      file_type: p.file_type,
+      size_bytes: p.size_bytes,
+      status: "Uploading",
+      failure_reason: null,
+      uploaded_at: new Date().toISOString(),
+      progress: p.progress,
+    }));
+    return pendingRows.concat(docs);
+  }, [pending, docs]);
+
   const counts = React.useMemo(() => {
-    const c = { all: docs.length, ready: 0, processing: 0, failed: 0 };
-    docs.forEach((d) => {
-      if (d.status === "ready") c.ready += 1;
-      else if (d.status === "failed") c.failed += 1;
+    const c = { all: rows.length, ready: 0, processing: 0, failed: 0 };
+    rows.forEach((d) => {
+      const key = statusKey(d.status);
+      if (key === "ready") c.ready += 1;
+      else if (key === "failed") c.failed += 1;
       else c.processing += 1;
     });
     return c;
-  }, [docs]);
+  }, [rows]);
 
   const filtered = React.useMemo(() => {
     const q = query.trim().toLowerCase();
-    return docs
+    return rows
       .filter((d) => {
-        const bucket = d.status === "uploading" ? "processing" : d.status;
+        const key = statusKey(d.status);
+        const bucket = key === "uploading" ? "processing" : key;
         if (statusFilter !== "all" && bucket !== statusFilter) return false;
         if (!q) return true;
         return d.filename.toLowerCase().includes(q) || d.file_type.toLowerCase().includes(q);
       })
       .sort((a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime());
-  }, [docs, query, statusFilter]);
+  }, [rows, query, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
+  function uploadOne(file: File) {
+    const clientId =
+      "pending_" + Math.random().toString(16).slice(2) + Date.now().toString(16).slice(-4);
+    setPending((prev) => [
+      { clientId, filename: file.name, file_type: extOf(file.name), size_bytes: file.size, progress: 0 },
+      ...prev,
+    ]);
+    uploadDocument(file, (pct) => {
+      setPending((prev) =>
+        prev.map((p) => (p.clientId === clientId ? { ...p, progress: pct } : p)),
+      );
+    })
+      .then((result) => {
+        setPending((prev) => prev.filter((p) => p.clientId !== clientId));
+        setDocs((prev) => [
+          {
+            id: result.id,
+            filename: result.filename,
+            file_type: result.file_type,
+            size_bytes: result.size_bytes,
+            status: result.status,
+            failure_reason: null,
+            uploaded_at: new Date().toISOString(),
+          },
+          ...prev,
+        ]);
+        setNotice({ tone: "ok", text: file.name + " uploaded and queued for indexing." });
+      })
+      .catch((err) => {
+        setPending((prev) => prev.filter((p) => p.clientId !== clientId));
+        const message = err instanceof Error ? err.message : "Upload failed.";
+        setRejected((prev) => [...prev, { name: file.name, reason: message + " It can be tried again." }]);
+        setNotice({
+          tone: "error",
+          text: file.name + " was not uploaded. It can be tried again.",
+        });
+      });
+  }
+
   function acceptFiles(fileList: FileList | null | undefined) {
     const files = Array.from(fileList || []);
     if (!files.length) return;
     const bad: RejectedFile[] = [];
-    const good: LibraryDocument[] = [];
+    const good: File[] = [];
     files.forEach((f) => {
       const ext = extOf(f.name);
       if (!ALLOWED_EXT.includes(ext)) {
@@ -395,75 +298,58 @@ export default function Screen() {
           reason: "Too large (" + formatBytes(f.size) + "). Maximum file size is 25 MB.",
         });
       } else {
-        const id =
-          "doc_" + Math.random().toString(16).slice(2, 6) + Date.now().toString(16).slice(-3);
-        good.push({
-          id,
-          filename: f.name,
-          file_type: ext,
-          size_bytes: f.size,
-          s3_key: "shared/" + id + "/" + f.name,
-          status: "uploading",
-          failure_reason: null,
-          uploaded_at: new Date().toISOString(),
-          chunks: 0,
-          progress: 0,
-          sim: true,
-          ticks: 0,
-        });
+        good.push(f);
       }
     });
     setRejected(bad);
-    if (good.length) {
-      setDocs((prev) => good.concat(prev));
-      setStatusFilter("all");
-      setQuery("");
-      setPage(1);
-      setNotice({
-        tone: "ok",
-        text:
-          good.length +
-          (good.length === 1
-            ? " file accepted and queued for indexing."
-            : " files accepted and queued for indexing."),
-      });
-    } else if (bad.length) {
+    if (bad.length && !good.length) {
       setNotice({
         tone: "error",
         text: "No files were uploaded. " + bad.length + " rejected before upload.",
       });
     }
+    if (good.length) {
+      setStatusFilter("all");
+      setQuery("");
+      setPage(1);
+    }
+    good.forEach(uploadOne);
   }
 
-  function onDrop(e) {
+  function onDrop(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
     setDragging(false);
     acceptFiles(e.dataTransfer && e.dataTransfer.files);
   }
 
-  function retry(doc: LibraryDocument) {
-    setDocs((prev) =>
-      prev.map((d) =>
-        d.id === doc.id
-          ? { ...d, status: "processing", failure_reason: null, sim: true, ticks: 0 }
-          : d,
-      ),
-    );
-    setNotice({
-      tone: "ok",
-      text: "Retrying ingestion for " + doc.filename + " from the stored original file.",
-    });
+  async function retry(doc: RowDoc) {
+    try {
+      const res = await retryDocument(doc.id);
+      setDocs((prev) =>
+        prev.map((d) => (d.id === doc.id ? { ...d, status: res.status, failure_reason: null } : d)),
+      );
+      setNotice({ tone: "ok", text: "Retrying ingestion for " + doc.filename + "." });
+    } catch (e) {
+      setNotice({
+        tone: "error",
+        text: "Could not retry " + doc.filename + ". " + (e instanceof Error ? e.message : ""),
+      });
+    }
   }
 
-  function openOriginal(doc: LibraryDocument) {
-    setNotice({
-      tone: "ok",
-      text: "Serving original file " + doc.filename + " from object storage (" + doc.s3_key + ").",
-    });
+  async function openOriginal(doc: RowDoc) {
+    try {
+      await downloadOriginal(doc.id, doc.filename);
+    } catch (e) {
+      setNotice({
+        tone: "error",
+        text: "Could not download " + doc.filename + ". " + (e instanceof Error ? e.message : ""),
+      });
+    }
   }
 
-  function openConfirm(doc: LibraryDocument) {
-    lastFocusRef.current = document.activeElement;
+  function openConfirm(doc: RowDoc) {
+    lastFocusRef.current = document.activeElement as HTMLElement | null;
     setConfirmDoc(doc);
   }
 
@@ -472,16 +358,24 @@ export default function Screen() {
     if (lastFocusRef.current && lastFocusRef.current.focus) lastFocusRef.current.focus();
   }
 
-  function confirmDelete() {
+  async function confirmDelete() {
     const doc = confirmDoc;
     if (!doc) return;
-    setDocs((prev) => prev.filter((d) => d.id !== doc.id));
-    setNotice({
-      tone: "ok",
-      text:
-        doc.filename +
-        " deleted for the whole workspace. Its chunks and embeddings are no longer retrievable.",
-    });
+    try {
+      await deleteDocument(doc.id);
+      setDocs((prev) => prev.filter((d) => d.id !== doc.id));
+      setNotice({
+        tone: "ok",
+        text:
+          doc.filename +
+          " deleted for the whole workspace. Its chunks and embeddings are no longer retrievable.",
+      });
+    } catch (e) {
+      setNotice({
+        tone: "error",
+        text: "Could not delete " + doc.filename + ". " + (e instanceof Error ? e.message : ""),
+      });
+    }
     closeConfirm();
   }
 
@@ -713,6 +607,20 @@ export default function Screen() {
               </button>
             </div>
           )}
+          {loadError && (
+            <div
+              className="mt-2 flex items-start gap-2 border px-4 py-2.5 text-sm"
+              style={{
+                borderColor: "rgba(255,123,114,0.35)",
+                backgroundColor: SURFACE,
+                borderRadius: brand.radius,
+                color: DANGER,
+              }}
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>Could not load the document library. {loadError}</span>
+            </div>
+          )}
         </div>
 
         {/* Documents */}
@@ -721,7 +629,7 @@ export default function Screen() {
             <h2 id="documents-heading" className="text-sm font-semibold">
               Documents
               <span className="ml-2 font-normal" style={{ color: brand.neutralColor }}>
-                {filtered.length} of {docs.length}
+                {filtered.length} of {rows.length}
               </span>
             </h2>
 
@@ -794,7 +702,13 @@ export default function Screen() {
           </div>
 
           <div className="mt-3 overflow-hidden border" style={cardStyle}>
-            {docs.length === 0 ? (
+            {loading ? (
+              <div className="px-6 py-14 text-center">
+                <p className="text-sm" style={{ color: brand.neutralColor }}>
+                  Loading the document library…
+                </p>
+              </div>
+            ) : rows.length === 0 ? (
               <div className="px-6 py-14 text-center">
                 <h3 className="text-sm font-semibold">The library is empty</h3>
                 <p className="mx-auto mt-2 max-w-md text-sm" style={{ color: brand.neutralColor }}>
@@ -820,7 +734,7 @@ export default function Screen() {
                 <h3 className="text-sm font-semibold">No documents match this view</h3>
                 <p className="mx-auto mt-2 max-w-md text-sm" style={{ color: brand.neutralColor }}>
                   Nothing matches {query ? '"' + query + '"' : "the selected status"}. Clear the
-                  filters to see all {docs.length} documents.
+                  filters to see all {rows.length} documents.
                 </p>
                 <button
                   type="button"
@@ -893,7 +807,8 @@ export default function Screen() {
                 </thead>
                 <tbody>
                   {visible.map((d) => {
-                    const meta = STATUS_META[d.status] || STATUS_META.processing;
+                    const key = statusKey(d.status);
+                    const meta = STATUS_META[key] || STATUS_META.processing;
                     const StatusIcon = meta.Icon;
                     return (
                       <tr
@@ -910,16 +825,16 @@ export default function Screen() {
                             />
                             <span className="min-w-0">
                               <span className="block truncate font-medium">{d.filename}</span>
-                              {d.status === "failed" ? (
+                              {key === "failed" ? (
                                 <span className="mt-1 block text-xs" style={{ color: DANGER }}>
                                   {d.failure_reason}
                                 </span>
-                              ) : d.status === "ready" ? (
+                              ) : key === "ready" ? (
                                 <span
                                   className="mt-1 block text-xs"
                                   style={{ color: brand.neutralColor }}
                                 >
-                                  {d.chunks} chunks indexed
+                                  Indexed for retrieval
                                 </span>
                               ) : (
                                 <span
@@ -960,7 +875,7 @@ export default function Screen() {
                             <StatusIcon className="h-3.5 w-3.5" aria-hidden="true" />
                             {meta.label}
                           </span>
-                          {d.status === "uploading" && (
+                          {key === "uploading" && (
                             <span className="mt-2 flex items-center gap-2">
                               <span
                                 className="block h-1 w-24 overflow-hidden"
@@ -994,7 +909,7 @@ export default function Screen() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1.5">
-                            {d.status === "failed" && (
+                            {key === "failed" && (
                               <button
                                 type="button"
                                 onClick={() => retry(d)}
@@ -1009,34 +924,38 @@ export default function Screen() {
                                 Retry<span className="sr-only"> ingestion of {d.filename}</span>
                               </button>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => openOriginal(d)}
-                              aria-label={"Download original file " + d.filename}
-                              className="nd-focus border p-1.5"
-                              style={{
-                                borderColor: BORDER,
-                                backgroundColor: SURFACE_SOFT,
-                                color: brand.neutralColor,
-                                borderRadius: brand.radius,
-                              }}
-                            >
-                              <Download className="h-4 w-4" aria-hidden="true" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openConfirm(d)}
-                              aria-label={"Delete " + d.filename + " from the shared library"}
-                              className="nd-focus border p-1.5"
-                              style={{
-                                borderColor: BORDER,
-                                backgroundColor: SURFACE_SOFT,
-                                color: DANGER,
-                                borderRadius: brand.radius,
-                              }}
-                            >
-                              <Trash className="h-4 w-4" aria-hidden="true" />
-                            </button>
+                            {key !== "uploading" && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => openOriginal(d)}
+                                  aria-label={"Download original file " + d.filename}
+                                  className="nd-focus border p-1.5"
+                                  style={{
+                                    borderColor: BORDER,
+                                    backgroundColor: SURFACE_SOFT,
+                                    color: brand.neutralColor,
+                                    borderRadius: brand.radius,
+                                  }}
+                                >
+                                  <Download className="h-4 w-4" aria-hidden="true" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => openConfirm(d)}
+                                  aria-label={"Delete " + d.filename + " from the shared library"}
+                                  className="nd-focus border p-1.5"
+                                  style={{
+                                    borderColor: BORDER,
+                                    backgroundColor: SURFACE_SOFT,
+                                    color: DANGER,
+                                    borderRadius: brand.radius,
+                                  }}
+                                >
+                                  <Trash className="h-4 w-4" aria-hidden="true" />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>

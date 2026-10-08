@@ -15,6 +15,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFi
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models import Citation, Document
 from app.schemas import (
@@ -33,15 +34,42 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 DbSession = Annotated[Session, Depends(get_db)]
 
 
+def _extension(filename: str) -> str:
+    """The lowercased extension (no leading dot), or '' when there is none."""
+    if "." not in filename:
+        return ""
+    return filename.rsplit(".", 1)[-1].lower()
+
+
 @router.post("", response_model=DocumentUploadResponse, status_code=201)
 async def upload_document(
     file: UploadFile,
     background_tasks: BackgroundTasks,
     db: DbSession,
 ) -> DocumentUploadResponse:
-    """Store the upload, create a Processing row, enqueue ingestion."""
-    content = await file.read()
+    """Store the upload, create a Processing row, enqueue ingestion.
+
+    Rejects an unsupported extension (415) or an oversized file (413) before
+    any Document row is created or any original is stored; each request is
+    validated independently of any other in-flight upload.
+    """
     filename = file.filename or "unknown"
+    extension = _extension(filename)
+    if extension not in settings.allowed_extensions:
+        supported = ", ".join(sorted(settings.allowed_extensions))
+        raise HTTPException(
+            status_code=415,
+            detail=f"Unsupported file type '.{extension or ''}'. Supported formats: {supported}.",
+        )
+
+    content = await file.read()
+    if len(content) > settings.max_upload_bytes:
+        max_mb = settings.max_upload_bytes / (1024 * 1024)
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds the {max_mb:g} MB maximum upload size.",
+        )
+
     s3_key = save_original(content, filename)
 
     document = Document(
